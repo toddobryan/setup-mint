@@ -1,0 +1,9 @@
+# JetBrains IDEs installed via Toolbox (install these after signing in).
+# Toolbox has no supported CLI for installing IDEs, so this is a manual checklist.
+Android Studio
+CLion
+DataGrip
+IntelliJ IDEA Ultimate
+PyCharm
+RustRover
+WebStorm

@@ -25,20 +25,33 @@ cd ~/code/bash/setup-mint
 ./setup.sh apt cargo       # just some sections
 ```
 
-Default run: `repos apt toolchains cargo npm dotfiles vscode`. The script is
-idempotent — re-running skips what's already there. `desktop` is **not** in the
-default set (it overwrites your desktop config); run it explicitly when ready:
-`./setup.sh desktop`.
+Default run: `env repos apt toolchains cargo debs manual flutter dotfiles vscode jetbrains`.
+The script is idempotent — re-running skips what's already there. Two sections are **not**
+in the default set: `npm` (global npm packages — you're reconsidering these) and `desktop`
+(it overwrites your desktop config). Run either explicitly: `./setup.sh npm` / `./setup.sh desktop`.
 
 ## What it does automatically
-- **repos** — adds OBS PPA, Claude Desktop, TeamViewer, and GitHub CLI apt sources
-- **apt** — installs the 67 packages you added yourself (`apt-packages.txt`)
-- **toolchains** — bootstraps rustup, nvm+Node 22, pyenv (+ your Python versions), ghcup/Haskell
+- **env** — installs your custom `/etc/profile.d` files (`system/profile.d/`): system-wide
+  nvm (`/opt/nvm`), Flutter on PATH, and Android SDK env. Your `~` dotfiles do **not** set
+  these, so this section is what actually makes Node/Flutter/Android tools resolve.
+- **repos** — adds OBS PPA, Claude Desktop, TeamViewer, GitHub CLI, VS Code, 1Password, and Chrome apt sources
+- **apt** — installs the packages you added yourself (`apt-packages.txt`), incl. `code`, `1password`, `google-chrome-stable`
+- **toolchains** — rustup, **system-wide nvm at `/opt/nvm`** (group-owned; Node **not** auto-installed — see below), pyenv (+ your Python versions), ghcup/Haskell
 - **cargo** — your 12 cargo tools (`cargo-tools.txt`), via `cargo-binstall` where possible
-- **npm** — global npm packages (`npm-global.txt`)
+- **npm** (not in default run) — global npm packages (`npm-global.txt`); parked while you decide which globals you want
+- **debs** — apps from downloaded `.deb`s (no repo): **Discord, Zoom, Surrealist** (latest from each vendor)
+- **manual** — **uv/uvx** and **SurrealDB (`surreal`)** to `/usr/local/bin`, plus **dvorak** built from source (`github.com/tbocek/dvorak`; `make install` also sets up its udev rule + systemd unit)
+- **flutter** — clones Flutter stable to `/opt/flutter` (kept as your Dart toolchain), user-owned so `flutter upgrade` needs no sudo
 - **dotfiles** — `.bashrc .zshrc .profile .gitconfig .gtkrc-2.0`, backing up existing ones
 - **vscode** — installs your 91 VS Code extensions (`vscode-extensions.txt`)
+- **jetbrains** — installs JetBrains Toolbox to `/opt` (manual tarball, not apt), chowned to
+  your user so it can self-update without sudo. The IDEs themselves need a JetBrains
+  account login, so `jetbrains-apps.txt` is a checklist you install from Toolbox by hand.
 - **desktop** (opt-in) — restores dconf; XFCE settings are a reference dump you apply by hand
+
+Deliberately **excluded**: `claude-desktop-unofficial` (redundant with the official
+`claude-desktop` from the repo). Orphaned config from tried-and-dropped apps (Vivaldi,
+Edge Dev, Chrome Beta/Unstable, Chromium, Evolution) was never installed here at all.
 
 ## Do these by hand — a script shouldn't
 
@@ -56,16 +69,32 @@ rsync -aP ~/.ssh ~/.gnupg toddobryan@NEW_HOST:~/
 ```
 
 **Account logins (GUI apps)** — installed by the script, but you sign in yourself:
-Claude Desktop, TeamViewer, Zoom, VS Code (Settings Sync), browsers/Thunderbird.
+Claude Desktop, TeamViewer, Zoom, Discord, VS Code (Settings Sync), Chrome, browsers/Thunderbird.
 
-**Large / version-pinned toolchains** — installed manually so you control versions:
+**Android SDK** (`/opt/Android/Sdk`) — the `android-sdk.sh` env is restored by the **env**
+section, but the SDK itself is large and best populated via Android Studio's SDK manager
+(Android Studio installs through JetBrains Toolbox), or `sdkmanager` from cmdline-tools.
+Flutter needs it for Android builds — run `flutter doctor --android-licenses` after.
+
+**Brother printer** (`MFC9970CDW`) — hardware-specific drivers (`brscan4`, `mfc9970cdw*`,
+`printer-driver-brlaser`). Only needed if the same printer is attached. Install via Brother's
+`linux-brprinter-installer` from support.brother.com, which prompts for the model.
+
+**Node via nvm** — `/opt/nvm` is installed group-owned (`nvm` group), and you're
+deliberately not in that group, so installing a Node version is an explicit sudo action:
+```bash
+sudo -E env NVM_DIR=/opt/nvm bash -c '. /opt/nvm/nvm.sh && nvm install 22'
+```
+Then decide on globals and run `./setup.sh npm` if you still want `npm-global.txt`.
+
+**Other toolchains** — installed manually so you control versions:
 - **.NET SDK** — `~/.dotnet` exists; install via Microsoft's feed or `dotnet-install.sh`
-- **Flutter / Dart** — `~/.flutter`, `~/.pub-cache`; clone the SDK and run `flutter doctor`
-- **Android SDK** — `~/.android`; use Android Studio's SDK manager
 - **Java** — `openjdk-17-jdk` comes via apt; add other JDKs if you need them
 
 ## Verify after running
 ```bash
+# open a NEW shell first so /etc/profile.d changes are loaded
 rustc --version && node --version && ghc --version && pyenv versions
+uv --version && surreal version && flutter --version
 gh auth status        # will prompt you to log in
 ```

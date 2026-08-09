@@ -48,6 +48,50 @@ section_repos() {
       | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
   fi
 
+  # VS Code (official Microsoft repo). The .deb normally adds this itself, but we
+  # set it up first so `code` can be installed straight from the apt manifest.
+  if [ ! -f /etc/apt/sources.list.d/vscode.sources ]; then
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+      | sudo gpg --dearmor -o /usr/share/keyrings/microsoft.gpg
+    sudo tee /etc/apt/sources.list.d/vscode.sources >/dev/null <<'EOF'
+Types: deb
+URIs: https://packages.microsoft.com/repos/code
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/microsoft.gpg
+EOF
+  fi
+
+  # 1Password (official repo). The .deb normally adds this itself.
+  if [ ! -f /etc/apt/sources.list.d/1password.sources ]; then
+    curl -fsSL https://downloads.1password.com/linux/keys/1password.asc \
+      | sudo gpg --dearmor -o /usr/share/keyrings/1password-archive-keyring.gpg
+    sudo tee /etc/apt/sources.list.d/1password.sources >/dev/null <<'EOF'
+Types: deb
+URIs: https://downloads.1password.com/linux/debian/amd64
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/1password-archive-keyring.gpg
+EOF
+  fi
+
+  # Google Chrome (official repo). The .deb normally adds this itself.
+  if [ ! -f /etc/apt/sources.list.d/google-chrome.sources ]; then
+    curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+      | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+    sudo tee /etc/apt/sources.list.d/google-chrome.sources >/dev/null <<'EOF'
+X-Repolib-Name: Google Chrome
+Types: deb
+URIs: https://dl.google.com/linux/chrome-stable/deb/
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/google-chrome.gpg
+EOF
+  fi
+
   sudo apt-get update
 }
 
@@ -68,14 +112,21 @@ section_toolchains() {
     . "$HOME/.cargo/env"
   fi
 
-  # --- nvm + Node (you had v22.21.0) ---
-  if [ ! -d "${NVM_DIR:-$HOME/.nvm}" ] && [ ! -d /opt/nvm ]; then
-    log "Installing nvm + Node 22"
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-    export NVM_DIR="$HOME/.nvm"
-    # shellcheck disable=SC1091
-    . "$NVM_DIR/nvm.sh"
-    nvm install 22
+  # --- nvm (system-wide, multi-user) ---
+  # nvm lives at /opt/nvm owned by an `nvm` group (see system/profile.d/nvm.sh).
+  # You're intentionally NOT in that group, so installing Node versions is a
+  # deliberate sudo action — this mirrors how you'd run a shared lab machine.
+  # Node is NOT installed here on purpose (you're reconsidering globals).
+  if [ ! -d /opt/nvm ]; then
+    log "Installing system-wide nvm at /opt/nvm (group-owned by 'nvm')"
+    sudo groupadd -f nvm
+    sudo git clone https://github.com/nvm-sh/nvm.git /opt/nvm
+    sudo git -C /opt/nvm checkout "$(sudo git -C /opt/nvm describe --tags --abbrev=0)"
+    sudo chown -R root:nvm /opt/nvm
+    sudo find /opt/nvm -type d -exec chmod 2775 {} +   # setgid: new files stay group nvm
+    sudo find /opt/nvm -type f -exec chmod g+w {} +
+    warn "To add Node later (needs sudo — you're not in the nvm group):"
+    warn "  sudo -E env NVM_DIR=/opt/nvm bash -c '. /opt/nvm/nvm.sh && nvm install 22'"
   fi
 
   # --- pyenv + Python versions ---
@@ -174,9 +225,121 @@ section_desktop() {
 }
 
 # --------------------------------------------------------------------------
+section_env() {
+  # Custom system-wide shell env that lives in /etc/profile.d (NOT your ~ dotfiles):
+  # nvm (/opt/nvm), flutter (/opt/flutter/bin), android sdk (/opt/Android/Sdk).
+  log "Installing custom /etc/profile.d files"
+  for f in "$HERE"/system/profile.d/*.sh; do
+    [ -f "$f" ] || continue
+    sudo install -m 0644 "$f" "/etc/profile.d/$(basename "$f")"
+    log "installed /etc/profile.d/$(basename "$f")"
+  done
+}
+
+# --------------------------------------------------------------------------
+section_debs() {
+  # Apps installed from a downloaded .deb (no apt repo). URLs are vendor "latest".
+  log "Installing downloaded .deb apps (discord, zoom, surrealist)"
+  local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
+
+  _install_deb() { # name  url
+    dpkg -l "$1" 2>/dev/null | grep -q '^ii' && { log "$1 already installed"; return; }
+    log "downloading $1"
+    if curl -fL "$2" -o "$tmp/$1.deb"; then
+      sudo apt-get install -y "$tmp/$1.deb"
+    else
+      warn "couldn't download $1 from $2 — install it by hand."
+    fi
+  }
+
+  _install_deb discord "https://discord.com/api/download?platform=linux&format=deb"
+  _install_deb zoom    "https://zoom.us/client/latest/zoom_amd64.deb"
+
+  # Surrealist ships .deb assets on GitHub releases; resolve the latest amd64 one.
+  if ! dpkg -l surrealist 2>/dev/null | grep -q '^ii'; then
+    local surl
+    surl="$(curl -fsSL https://api.github.com/repos/surrealdb/surrealist/releases/latest \
+            | grep -oE 'https://[^"]+(amd64|x86_64|linux)[^"]+\.deb' | head -1)"
+    [ -n "$surl" ] && _install_deb surrealist "$surl" \
+      || warn "couldn't find a Surrealist .deb asset — grab it from https://surrealdb.com/surrealist"
+  fi
+}
+
+# --------------------------------------------------------------------------
+section_manual() {
+  # uv/uvx (Astral) — you keep these in /usr/local/bin (system-wide).
+  if ! command -v uv >/dev/null 2>&1; then
+    log "Installing uv + uvx to /usr/local/bin"
+    curl -LsSf https://astral.sh/uv/install.sh | sudo env UV_INSTALL_DIR=/usr/local/bin sh
+  fi
+
+  # SurrealDB server (`surreal`) — official installer drops it in /usr/local/bin.
+  if ! command -v surreal >/dev/null 2>&1; then
+    log "Installing SurrealDB (surreal)"
+    curl -sSf https://install.surrealdb.com | sudo sh
+  fi
+
+  # dvorak — built from source (github.com/tbocek/dvorak). `make install` also
+  # installs the udev rule + systemd unit, so the remapper works for all users.
+  if ! command -v dvorak >/dev/null 2>&1; then
+    log "Building dvorak from source"
+    local dv="$HOME/code/c-c++/dvorak"
+    [ -d "$dv/.git" ] || git clone https://github.com/tbocek/dvorak.git "$dv"
+    ( cd "$dv" && make && sudo make install )
+  fi
+}
+
+# --------------------------------------------------------------------------
+section_flutter() {
+  # You keep Flutter as the easiest way to maintain a working Dart toolchain.
+  # profile.d/flutter.sh (installed by section_env) puts /opt/flutter/bin on PATH.
+  if [ -d /opt/flutter ]; then
+    log "Flutter already present at /opt/flutter"
+  else
+    log "Cloning Flutter (stable) to /opt/flutter"
+    sudo git clone --depth 1 -b stable https://github.com/flutter/flutter.git /opt/flutter
+    sudo chown -R "$(id -un):$(id -gn)" /opt/flutter   # user-owned so `flutter upgrade` needs no sudo
+  fi
+  export PATH="/opt/flutter/bin:$PATH"
+  flutter --version 2>/dev/null || warn "Open a new shell (for PATH) then run: flutter doctor"
+}
+
+# --------------------------------------------------------------------------
+section_jetbrains() {
+  # JetBrains Toolbox is a manual tarball install to /opt (NOT apt/PPA). It then
+  # manages the individual IDEs, which require a JetBrains account login to install.
+  if ls -d /opt/jetbrains-toolbox-* >/dev/null 2>&1; then
+    log "JetBrains Toolbox already installed in /opt."
+  else
+    log "Installing JetBrains Toolbox (latest) to /opt"
+    local tmp; tmp="$(mktemp -d)"
+    # Stable redirect to the newest Linux tarball — avoids pinning a stale version.
+    if curl -fsSL "https://data.services.jetbrains.com/products/download?platform=linux&code=TBA" -o "$tmp/toolbox.tar.gz"; then
+      sudo tar -xzf "$tmp/toolbox.tar.gz" -C /opt
+      # /opt is root-owned so extraction needs sudo, but Toolbox self-updates in
+      # place — hand the app dir to your user so updates don't require sudo.
+      sudo chown -R "$(id -un):$(id -gn)" /opt/jetbrains-toolbox-*
+      local bin; bin="$(find /opt/jetbrains-toolbox-* -maxdepth 2 -name jetbrains-toolbox -type f 2>/dev/null | head -1)"
+      if [ -n "$bin" ] && [ -n "${DISPLAY:-}" ]; then
+        log "Launching Toolbox once so it registers its menu entry + autostart."
+        "$bin" >/dev/null 2>&1 &
+      else
+        warn "Toolbox extracted to /opt. Launch it once manually to finish setup:"
+        warn "  $bin"
+      fi
+    else
+      warn "Couldn't download Toolbox. Install it by hand from https://www.jetbrains.com/toolbox-app/"
+    fi
+    rm -rf "$tmp"
+  fi
+  warn "Sign in to JetBrains Toolbox, then (re)install the IDEs you had:"
+  grep -vE '^\s*#|^\s*$' "$HERE/jetbrains-apps.txt" | sed 's/^/      - /'
+}
+
+# --------------------------------------------------------------------------
 main() {
   local sections=("$@")
-  [ ${#sections[@]} -eq 0 ] && sections=(repos apt toolchains cargo npm dotfiles vscode)
+  [ ${#sections[@]} -eq 0 ] && sections=(env repos apt toolchains cargo debs manual flutter dotfiles vscode jetbrains)
   for s in "${sections[@]}"; do
     "section_$s" || warn "section '$s' reported errors (continuing)"
   done

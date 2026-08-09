@@ -1,3 +1,4 @@
+1password
 bacula-console-qt
 bat
 build-essential
@@ -5,6 +6,7 @@ ccache
 clang
 claude-desktop
 cmake
+code
 curl
 file
 gh
@@ -13,6 +15,7 @@ gimp
 gimp-data-extras
 gimp-help-en
 git
+google-chrome-stable
 graphviz
 htop
 just
