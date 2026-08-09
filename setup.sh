@@ -24,21 +24,22 @@ section_repos() {
     sudo add-apt-repository -y ppa:obsproject/obs-studio
   fi
 
-  # Claude Desktop
-  if [ ! -f /usr/share/keyrings/claude-desktop-archive-keyring.asc ]; then
-    curl -fsSL https://downloads.claude.ai/claude-desktop/apt/keyring.asc \
-      | sudo tee /usr/share/keyrings/claude-desktop-archive-keyring.asc >/dev/null
-    echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/claude-desktop-archive-keyring.asc] https://downloads.claude.ai/claude-desktop/apt/stable stable main" \
-      | sudo tee /etc/apt/sources.list.d/claude-desktop.list >/dev/null
+  # Racket official PPA — replaces the old manual /usr/bin install (raco, drracket).
+  if ! grep -rqs 'plt/racket' /etc/apt/sources.list.d/ 2>/dev/null; then
+    sudo add-apt-repository -y ppa:plt/racket
   fi
 
-  # TeamViewer
-  if [ ! -f /usr/share/keyrings/teamviewer-keyring.gpg ]; then
-    curl -fsSL https://linux.teamviewer.com/pubkey/currentkey.asc \
-      | sudo gpg --dearmor -o /usr/share/keyrings/teamviewer-keyring.gpg
-    echo "deb [signed-by=/usr/share/keyrings/teamviewer-keyring.gpg] https://linux.teamviewer.com/deb stable main" \
-      | sudo tee /etc/apt/sources.list.d/teamviewer.list >/dev/null
+  # Claude Desktop — official signing key (per code.claude.com/docs/en/desktop-linux).
+  # Falls back to the copy shipped in this repo if the download is unavailable, so a
+  # failed fetch can't leave an empty keyring and an "unsigned repo" error.
+  if ! sudo curl -fsSLo /usr/share/keyrings/claude-desktop-archive-keyring.asc \
+        https://downloads.claude.ai/claude-desktop/key.asc; then
+    warn "key.asc download failed; using the copy shipped in this repo"
+    sudo install -m 0644 "$HERE/system/keyrings/claude-desktop-archive-keyring.asc" \
+      /usr/share/keyrings/claude-desktop-archive-keyring.asc
   fi
+  echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/claude-desktop-archive-keyring.asc] https://downloads.claude.ai/claude-desktop/apt/stable stable main" \
+    | sudo tee /etc/apt/sources.list.d/claude-desktop.list >/dev/null
 
   # GitHub CLI (gh) — you have it installed; ensure its repo exists
   if [ ! -f /etc/apt/sources.list.d/github-cli.list ]; then
@@ -240,7 +241,7 @@ section_env() {
 section_debs() {
   # Apps installed from a downloaded .deb (no apt repo). URLs are vendor "latest".
   log "Installing downloaded .deb apps (discord, zoom, surrealist)"
-  local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
+  local tmp; tmp="$(mktemp -d)"
 
   _install_deb() { # name  url
     dpkg -l "$1" 2>/dev/null | grep -q '^ii' && { log "$1 already installed"; return; }
@@ -255,14 +256,19 @@ section_debs() {
   _install_deb discord "https://discord.com/api/download?platform=linux&format=deb"
   _install_deb zoom    "https://zoom.us/client/latest/zoom_amd64.deb"
 
-  # Surrealist ships .deb assets on GitHub releases; resolve the latest amd64 one.
+  # Surrealist ships its .deb on GitHub releases (asset name carries the version,
+  # e.g. Surrealist_3.9.10_amd64.deb). Resolve the latest amd64 .deb via the API —
+  # one call per run, short-circuited by the dpkg check once installed.
   if ! dpkg -l surrealist 2>/dev/null | grep -q '^ii'; then
     local surl
     surl="$(curl -fsSL https://api.github.com/repos/surrealdb/surrealist/releases/latest \
-            | grep -oE 'https://[^"]+(amd64|x86_64|linux)[^"]+\.deb' | head -1)"
+            | grep -oE '"browser_download_url": *"[^"]+"' | grep -oE 'https://[^"]+' \
+            | grep -iE 'amd64|x86_64' | grep -E '\.deb$' | head -1)"
     [ -n "$surl" ] && _install_deb surrealist "$surl" \
-      || warn "couldn't find a Surrealist .deb asset — grab it from https://surrealdb.com/surrealist"
+      || warn "couldn't resolve a Surrealist .deb (GitHub API rate limit?) — grab it from https://surrealdb.com/surrealist"
   fi
+
+  rm -rf "$tmp"
 }
 
 # --------------------------------------------------------------------------

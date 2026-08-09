@@ -55,6 +55,7 @@ python3-openssl
 python3-venv
 python-is-python3
 qemu-system
+racket
 redshift
 redshift-gtk
 tesseract-ocr

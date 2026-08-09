@@ -2,27 +2,29 @@
 
 Generated from **toddobryan** on Linux Mint 22.2 (Zara). Run on a fresh Mint 22.x box.
 
-## Step 0 — SSH key + clone (before anything else)
+## Step 0 — get the repo and run it (right after install)
 
-The repo's remote is SSH, so you need a GitHub key before you can clone it.
-`bootstrap-ssh.sh` solves the chicken-and-egg: get *just that one file* onto the
-new machine (USB/scp, or `curl` it from raw GitHub if the repo is public), then:
+This repo is **public**, so on a fresh machine you just clone it over HTTPS — no key,
+no file transfer. Reachable from Firefox or straight from the terminal:
+
+```bash
+sudo apt update && sudo apt install -y git        # Mint XFCE does NOT ship git — this is required
+git clone https://github.com/toddobryan/setup-mint.git ~/code/bash/setup-mint
+cd ~/code/bash/setup-mint
+./setup.sh                 # everything (or: ./setup.sh apt cargo  for just some sections)
+```
+
+That's the entire "right after install" flow.
+
+## Optional — set up your GitHub SSH key
+
+`bootstrap-ssh.sh` is **not** needed to get this repo (the HTTPS clone above needs no
+auth). Its only job is to create a GitHub SSH key for your own future `git push` work:
+it generates `~/.ssh/github_id_ed25519`, registers it with GitHub (via `gh`, or prints
+the key for you to paste), and re-points this clone at the SSH remote. Run it whenever:
 
 ```bash
 bash bootstrap-ssh.sh
-```
-
-It generates `~/.ssh/github_id_ed25519`, registers it with GitHub (via `gh` if
-present, otherwise it prints the key and opens the GitHub page for you to paste),
-tests the connection, and clones this repo to `~/code/bash/setup-mint`. Run it as
-a file, not piped into bash, so the passphrase and login prompts work.
-
-## Then — the rest
-
-```bash
-cd ~/code/bash/setup-mint
-./setup.sh                 # everything
-./setup.sh apt cargo       # just some sections
 ```
 
 Default run: `env repos apt toolchains cargo debs manual flutter dotfiles vscode jetbrains`.
@@ -34,7 +36,7 @@ in the default set: `npm` (global npm packages — you're reconsidering these) a
 - **env** — installs your custom `/etc/profile.d` files (`system/profile.d/`): system-wide
   nvm (`/opt/nvm`), Flutter on PATH, and Android SDK env. Your `~` dotfiles do **not** set
   these, so this section is what actually makes Node/Flutter/Android tools resolve.
-- **repos** — adds OBS PPA, Claude Desktop, TeamViewer, GitHub CLI, VS Code, 1Password, and Chrome apt sources
+- **repos** — adds OBS PPA, Racket PPA, Claude Desktop, GitHub CLI, VS Code, 1Password, and Chrome apt sources
 - **apt** — installs the packages you added yourself (`apt-packages.txt`), incl. `code`, `1password`, `google-chrome-stable`
 - **toolchains** — rustup, **system-wide nvm at `/opt/nvm`** (group-owned; Node **not** auto-installed — see below), pyenv (+ your Python versions), ghcup/Haskell
 - **cargo** — your 12 cargo tools (`cargo-tools.txt`), via `cargo-binstall` where possible
@@ -69,7 +71,7 @@ rsync -aP ~/.ssh ~/.gnupg toddobryan@NEW_HOST:~/
 ```
 
 **Account logins (GUI apps)** — installed by the script, but you sign in yourself:
-Claude Desktop, TeamViewer, Zoom, Discord, VS Code (Settings Sync), Chrome, browsers/Thunderbird.
+Claude Desktop, Zoom, Discord, VS Code (Settings Sync), Chrome, browsers/Thunderbird.
 
 **Android SDK** (`/opt/Android/Sdk`) — the `android-sdk.sh` env is restored by the **env**
 section, but the SDK itself is large and best populated via Android Studio's SDK manager
