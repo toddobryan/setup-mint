@@ -1,0 +1,13 @@
+# Safety net: never commit secrets to this repo, even if staged into dotfiles/
+dotfiles/.ssh/
+dotfiles/.gnupg/
+dotfiles/.npmrc
+dotfiles/.netrc
+**/credentials
+**/*.pem
+**/*_rsa
+**/*_ed25519
+**/id_*
+.claude.json
+*.key
+*.token

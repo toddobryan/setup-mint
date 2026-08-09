@@ -1,0 +1,7 @@
+[user]
+	email = toddobryan@gmail.com
+	name = Todd O'Bryan
+[init]
+	defaultBranch = main
+[pull]
+	rebase = false

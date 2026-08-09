@@ -1,0 +1,12 @@
+cargo-binstall
+cargo-expand
+cargo-leptos
+cargo-llvm-cov
+cargo-workspace-deps
+dioxus-cli
+evcxr_repl
+just
+just-lsp
+leptosfmt
+sccache
+trunk
