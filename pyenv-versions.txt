@@ -1,3 +1,6 @@
+# Python versions installed via pyenv. First uncommented line = global default.
+# Only the latest is installed now; the older EOL versions are kept here for
+# reference — uncomment if a legacy project needs one.
 3.13.13
-3.7.17
-3.5.10
+# 3.7.17
+# 3.5.10

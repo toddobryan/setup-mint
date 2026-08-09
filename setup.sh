@@ -138,11 +138,13 @@ section_toolchains() {
     eval "$(pyenv init -)"
   fi
   if command -v pyenv >/dev/null 2>&1; then
+    local pyfirst=""
     while read -r v; do
-      [ -z "$v" ] && continue
+      case "$v" in ''|\#*) continue;; esac      # skip blank lines and comments
+      [ -z "$pyfirst" ] && pyfirst="$v"          # first real entry = global default
       pyenv versions --bare | grep -qx "$v" || { log "pyenv install $v"; pyenv install -s "$v"; }
     done < "$HERE/pyenv-versions.txt"
-    pyenv global "$(head -1 "$HERE/pyenv-versions.txt")"
+    [ -n "$pyfirst" ] && pyenv global "$pyfirst"
   fi
 
   # --- ghcup / Haskell (you had GHC 9.6.7) ---
@@ -343,9 +345,66 @@ section_jetbrains() {
 }
 
 # --------------------------------------------------------------------------
+section_xfce() {
+  # XFCE settings live in xfconf (~/.config/xfce4), NOT dconf. xfconfd rewrites
+  # these files on logout, so this MUST run while logged OUT of your XFCE session
+  # (from a TTY) or the restore gets clobbered. Monitor layout (displays.xml) is
+  # intentionally not shipped. Opt-in — not in the default run.
+  local src="$HERE/desktop/xfce4" dst="$HOME/.config/xfce4"
+  [ -d "$src" ] || { warn "no staged XFCE config at $src"; return; }
+  if pgrep -u "$(id -u)" xfconfd >/dev/null 2>&1; then
+    warn "xfconfd is running — you appear to be in an XFCE session, so a restore now"
+    warn "would be overwritten on logout. Log out to a TTY (Ctrl+Alt+F2), then re-run:"
+    warn "  ./setup.sh xfce"
+    return 1
+  fi
+  [ -d "$dst" ] && cp -a "$dst" "$dst.bak.$(date +%s)"
+  mkdir -p "$dst"
+  cp -a "$src/." "$dst/"
+  log "XFCE config restored to $dst (set your monitor layout by hand — displays.xml not shipped)."
+}
+
+# --------------------------------------------------------------------------
+section_githubkey() {
+  # You don't need a GitHub key to clone this (public repo, HTTPS) — but it's nice
+  # to end the run with one set up for your own pushes. Non-interactive: generates a
+  # passphrase-less key and only uploads if gh is already logged in; otherwise it
+  # prints the next steps rather than touching your GitHub account.
+  local key="$HOME/.ssh/github_id_ed25519"
+  mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+  if [ -f "$key" ]; then
+    log "GitHub SSH key already exists: $key"
+  else
+    log "Generating a GitHub SSH key: $key"
+    ssh-keygen -t ed25519 -C "${GIT_EMAIL:-toddobryan@gmail.com}" -f "$key" -N ""
+    warn "Key created with no passphrase; add one anytime with: ssh-keygen -p -f $key"
+  fi
+  local cfg="$HOME/.ssh/config"; touch "$cfg"; chmod 600 "$cfg"
+  if ! grep -qE '^[[:space:]]*Host[[:space:]]+github\.com[[:space:]]*$' "$cfg"; then
+    cat >> "$cfg" <<EOF
+
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile $key
+    IdentitiesOnly yes
+EOF
+  fi
+  if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+    gh ssh-key add "$key.pub" --title "$(hostname)-$(date +%Y%m%d)" --type authentication \
+      && log "public key uploaded to GitHub" || warn "gh ssh-key add failed (already registered?)"
+  else
+    warn "GitHub key ready but not registered. Finish it with either:"
+    warn "  gh auth login && gh ssh-key add $key.pub --title \"\$(hostname)\""
+    warn "  — or paste this at https://github.com/settings/ssh/new :"
+    warn "    $(cat "$key.pub")"
+  fi
+}
+
+# --------------------------------------------------------------------------
 main() {
   local sections=("$@")
-  [ ${#sections[@]} -eq 0 ] && sections=(env repos apt toolchains cargo debs manual flutter dotfiles vscode jetbrains)
+  [ ${#sections[@]} -eq 0 ] && sections=(env repos apt toolchains cargo debs manual flutter dotfiles vscode jetbrains githubkey)
   for s in "${sections[@]}"; do
     "section_$s" || warn "section '$s' reported errors (continuing)"
   done

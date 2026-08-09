@@ -28,9 +28,10 @@ bash bootstrap-ssh.sh
 ```
 
 Default run: `env repos apt toolchains cargo debs manual flutter dotfiles vscode jetbrains`.
-The script is idempotent — re-running skips what's already there. Two sections are **not**
-in the default set: `npm` (global npm packages — you're reconsidering these) and `desktop`
-(it overwrites your desktop config). Run either explicitly: `./setup.sh npm` / `./setup.sh desktop`.
+The script is idempotent — re-running skips what's already there. Three sections are **not**
+in the default set: `npm` (globals you're reconsidering), `desktop` (dconf), and `xfce`
+(XFCE prefs — **must be run logged out of XFCE**, see below). Run explicitly, e.g.
+`./setup.sh xfce`.
 
 ## What it does automatically
 - **env** — installs your custom `/etc/profile.d` files (`system/profile.d/`): system-wide
@@ -49,7 +50,12 @@ in the default set: `npm` (global npm packages — you're reconsidering these) a
 - **jetbrains** — installs JetBrains Toolbox to `/opt` (manual tarball, not apt), chowned to
   your user so it can self-update without sudo. The IDEs themselves need a JetBrains
   account login, so `jetbrains-apps.txt` is a checklist you install from Toolbox by hand.
-- **desktop** (opt-in) — restores dconf; XFCE settings are a reference dump you apply by hand
+- **desktop** (opt-in) — restores dconf (GTK/Cinnamon app settings)
+- **xfce** (opt-in) — restores your XFCE prefs from `desktop/xfce4/` (panels, keyboard
+  shortcuts incl. Dvorak, window manager, terminal). **Must be run logged out of XFCE**
+  (from a TTY: log out → `Ctrl+Alt+F2` → log in → `./setup.sh xfce` → back with `Ctrl+Alt+F1`)
+  or `xfconfd` overwrites it on logout. The section refuses to run if it detects a live XFCE
+  session. Monitor layout is excluded (hardware-specific — set it by hand).
 
 Deliberately **excluded**: `claude-desktop-unofficial` (redundant with the official
 `claude-desktop` from the repo). Orphaned config from tried-and-dropped apps (Vivaldi,
