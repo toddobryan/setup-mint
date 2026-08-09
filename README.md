@@ -2,19 +2,26 @@
 
 Generated from **toddobryan** on Linux Mint 22.2 (Zara). Run on a fresh Mint 22.x box.
 
-## Step 0 — get the repo and run it (right after install)
+## Step 0 — get the repo and run it (from a TTY, before your first XFCE login)
 
-This repo is **public**, so on a fresh machine you just clone it over HTTPS — no key,
-no file transfer. Reachable from Firefox or straight from the terminal:
+Do this from a **text console (TTY), not inside an XFCE session**, and do it *before*
+you ever log into XFCE: at the login screen press `Ctrl+Alt+F2` and log in there.
+Running here means the `apt` section installs the panel-plugin packages (cpugraph,
+sensors) *before* the panel first reads your restored config — otherwise XFCE drops the
+missing plugins and prunes them from your layout on logout (see the `xfce` section).
+
+This repo is **public**, so you just clone it over HTTPS — no key, no file transfer:
 
 ```bash
 sudo apt update && sudo apt install -y git        # Mint XFCE does NOT ship git — this is required
 git clone https://github.com/toddobryan/setup-mint.git ~/code/bash/setup-mint
 cd ~/code/bash/setup-mint
-./setup.sh                 # everything (or: ./setup.sh apt cargo  for just some sections)
+./setup.sh                 # everything (installs apt packages incl. panel plugins)
+./setup.sh xfce            # restore XFCE prefs — safe now, still logged out of XFCE
 ```
 
-That's the entire "right after install" flow.
+Then switch back (`Ctrl+Alt+F1` or `F7`) and log into XFCE for the first time — panels,
+shortcuts, and plugins all come up intact. That's the entire "right after install" flow.
 
 ## Optional — set up your GitHub SSH key
 
