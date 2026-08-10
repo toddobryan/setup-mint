@@ -36,5 +36,5 @@ export PATH="$PATH:/home/toddobryan/.pub-cache/bin"
 setxkbmap -option ctrl:swap_lalt_lctl
 
 [ -f "/home/toddobryan/.ghcup/env" ] && . "/home/toddobryan/.ghcup/env" # ghcup-env
-. "$HOME/.local/bin/env"
-. "$HOME/.cargo/env"
+[ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"   # uv env (only when uv is installed under ~/.local)
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
