@@ -403,6 +403,17 @@ EOF
 
 # --------------------------------------------------------------------------
 main() {
+  # This script runs as your normal user and calls sudo itself only for the steps
+  # that need root. Running the WHOLE thing under sudo breaks every per-user step:
+  # VS Code extensions (code refuses to run as root), ~/.ssh key + config, rustup/
+  # pyenv/ghcup, npm globals and dotfiles all land in root's home or fail outright.
+  if [ "$(id -u)" -eq 0 ]; then
+    warn "Don't run this with sudo or as root — run it as your normal user:"
+    warn "    ./setup.sh"
+    warn "It already uses sudo internally for the few steps that need it."
+    exit 1
+  fi
+
   local sections=("$@")
   [ ${#sections[@]} -eq 0 ] && sections=(env repos apt toolchains cargo debs manual flutter dotfiles vscode jetbrains githubkey)
   for s in "${sections[@]}"; do

@@ -28,7 +28,6 @@ haskell.language-haskell
 hbenl.vscode-test-explorer
 hoovercj.haskell-linter
 jock.svg
-justusadam.language-haskell
 karyfoundation.nearley
 karyfoundation.theme-karyfoundation-themes
 kevinrose.vsc-python-indent
