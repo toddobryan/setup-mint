@@ -128,6 +128,6 @@ eval "$(pyenv init - bash)"
 
 eval "$(pyenv virtualenv-init -)"
 
-. "$HOME/.local/bin/env"
-eval "$(uv generate-shell-completion bash)"
-. "$HOME/.cargo/env"
+[ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"   # uv env (only when uv is installed under ~/.local)
+command -v uv >/dev/null 2>&1 && eval "$(uv generate-shell-completion bash)"
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
